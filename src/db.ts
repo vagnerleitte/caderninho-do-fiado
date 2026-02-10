@@ -118,7 +118,9 @@ class BotecoDB extends Dexie {
         const paymentsTable = tx.table<Payment, number>("payments");
         const saleItemsTable = tx.table<SaleItem, number>("sale_items");
 
-        const orphanComandas = await comandasTable.where("customerId").equals(null).toArray();
+        const orphanComandas = await comandasTable
+          .filter((comanda) => comanda.customerId === null)
+          .toArray();
         const orphanComandaIds = orphanComandas.map((c) => c.id).filter((id): id is number => Boolean(id));
         if (orphanComandaIds.length === 0) return;
 
