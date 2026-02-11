@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import {
   Accordion,
   AccordionDetails,
@@ -31,6 +31,8 @@ import {
   Switch,
   Tab,
   Tabs,
+  ToggleButton,
+  ToggleButtonGroup,
   TextField,
   ThemeProvider,
   Tooltip,
@@ -39,10 +41,15 @@ import {
   createTheme
 } from "@mui/material";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import ViewListIcon from "@mui/icons-material/ViewList";
+import GridViewIcon from "@mui/icons-material/GridView";
+import CloseIcon from "@mui/icons-material/Close";
+import AddIcon from "@mui/icons-material/Add";
 import FavoriteIcon from "@mui/icons-material/Favorite";
 import FavoriteBorderIcon from "@mui/icons-material/FavoriteBorder";
 import VisibilityIcon from "@mui/icons-material/Visibility";
 import VisibilityOffIcon from "@mui/icons-material/VisibilityOff";
+import BackspaceIcon from "@mui/icons-material/Backspace";
 import { useLiveQuery } from "dexie-react-hooks";
 import {
   db,
@@ -139,6 +146,7 @@ export default function App() {
   const unlockTtlMs = 5 * 60 * 1000;
   const [tab, setTab] = useState(0);
   const [selectedComandaFromHome, setSelectedComandaFromHome] = useState<number | null>(null);
+  const [initialSaleProductId, setInitialSaleProductId] = useState<number | null>(null);
   const [showAmounts, setShowAmounts] = useState(() => {
     if (typeof window === "undefined") return false;
     return localStorage.getItem("boteco_show_amounts") === "true";
@@ -156,6 +164,16 @@ export default function App() {
   const [pinError, setPinError] = useState("");
   const [pinInput, setPinInput] = useState("");
   const [pinConfirm, setPinConfirm] = useState("");
+  const pinInputRef = useRef<HTMLInputElement | null>(null);
+
+  const appendPinDigit = (digit: string) => {
+    if (pinInput.length >= 6) return;
+    setPinInput((prev) => prev + digit);
+  };
+
+  const backspacePin = () => {
+    setPinInput((prev) => prev.slice(0, -1));
+  };
   const theme = useMemo(
     () =>
       createTheme({
@@ -199,6 +217,24 @@ export default function App() {
     }, unlockUntil - Date.now());
     return () => window.clearTimeout(timeout);
   }, [unlockUntil]);
+
+  useEffect(() => {
+    if (pinReady === null || isUnlocked) return;
+    window.setTimeout(() => pinInputRef.current?.focus(), 50);
+  }, [pinReady, isUnlocked]);
+
+  useEffect(() => {
+    if (!isUnlocked) return;
+    const refresh = () => {
+      const until = Date.now() + unlockTtlMs;
+      localStorage.setItem("boteco_unlock_until", String(until));
+      setUnlockUntil(until);
+    };
+    const handler = () => refresh();
+    const events: Array<keyof WindowEventMap> = ["pointerdown", "keydown", "touchstart"];
+    events.forEach((event) => window.addEventListener(event, handler, { passive: true }));
+    return () => events.forEach((event) => window.removeEventListener(event, handler));
+  }, [isUnlocked, unlockTtlMs]);
 
   const handleSetPin = async () => {
     if (pinInput.length < 4) {
@@ -250,22 +286,53 @@ export default function App() {
                 alignItems: "center",
                 justifyContent: "center",
                 px: 3,
-                background: "linear-gradient(180deg, #0f766e 0%, #0f172a 100%)"
+                position: "relative",
+                overflow: "hidden",
+                backgroundColor: "#0f172a",
+                "::before": {
+                  content: "\"\"",
+                  position: "absolute",
+                  inset: 0,
+                  backgroundImage: "url(/pin-bg.jpg)",
+                  backgroundSize: "cover",
+                  backgroundPosition: "center",
+                  filter: "blur(4px)",
+                  transform: "scale(1.05)"
+                },
+                "::after": {
+                  content: "\"\"",
+                  position: "absolute",
+                  inset: 0,
+                  background: "linear-gradient(180deg, rgba(15, 23, 42, 0.55) 0%, rgba(9, 18, 24, 0.85) 100%)"
+                }
               }}
             >
+              <Box sx={{ position: "relative", zIndex: 1, width: "100%", display: "flex", justifyContent: "center" }}>
               <Card
                 sx={{
                   width: "100%",
-                  maxWidth: 420,
-                  borderRadius: 6,
-                  bgcolor: "rgba(255, 255, 255, 0.78)",
-                  backdropFilter: "blur(12px)",
-                  border: "1px solid rgba(255, 255, 255, 0.5)",
-                  boxShadow: "0 20px 50px rgba(2, 6, 23, 0.35)"
+                  maxWidth: 520,
+                  borderRadius: 4,
+                  bgcolor: "rgba(255, 255, 255, 0.2)",
+                  backdropFilter: "blur(5px)",
+                  WebkitBackdropFilter: "blur(5px)",
+                  border: "1.5px solid rgba(255, 255, 255, 0.35)",
+                  boxShadow: "0 4px 30px rgba(0, 0, 0, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.25)",
+                  color: "#f8fafc",
+                  ".MuiTypography-root": { color: "#f8fafc" },
+                  ".MuiInputLabel-root": { color: "rgba(248, 250, 252, 0.8)" },
+                  ".MuiOutlinedInput-input": { color: "#f8fafc" },
+                  ".MuiOutlinedInput-notchedOutline": { borderColor: "rgba(248, 250, 252, 0.4)" },
+                  ".MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline": {
+                    borderColor: "rgba(248, 250, 252, 0.7)"
+                  },
+                  ".MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline": {
+                    borderColor: "#f8fafc"
+                  }
                 }}
               >
                 <CardContent>
-                  <Stack spacing={2}>
+                  <Stack spacing={2} alignItems="center">
                     <Stack spacing={0.5} textAlign="center">
                       <Typography variant="h6" fontWeight={800} color="text.primary">
                         {pinReady ? "Desbloquear" : "Criar PIN"}
@@ -283,7 +350,77 @@ export default function App() {
                       onChange={(event) => setPinInput(event.target.value)}
                       inputProps={{ inputMode: "numeric", pattern: "[0-9]*", maxLength: 6 }}
                       fullWidth
+                      sx={{ maxWidth: 420 }}
+                      inputRef={pinInputRef}
                     />
+                    <Grid container spacing={1} sx={{ maxWidth: 420, mx: "auto" }}>
+                      {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((digit) => (
+                        <Grid key={digit} item xs={4}>
+                          <Button
+                            variant="outlined"
+                            onClick={() => appendPinDigit(String(digit))}
+                            fullWidth
+                            sx={{
+                              py: 1.5,
+                              color: "#ffd76a",
+                              borderColor: "rgba(247, 201, 72, 0.6)",
+                              backgroundColor: "rgba(247, 201, 72, 0.08)",
+                              boxShadow: "inset 0 1px 0 rgba(255, 255, 255, 0.15)",
+                              "&:hover": {
+                                borderColor: "#f7c948",
+                                backgroundColor: "rgba(247, 201, 72, 0.16)"
+                              },
+                              textShadow: "0 0 6px rgba(255, 215, 106, 0.55)"
+                            }}
+                          >
+                            {digit}
+                          </Button>
+                        </Grid>
+                      ))}
+                      <Grid item xs={4} />
+                      <Grid item xs={4}>
+                        <Button
+                          variant="outlined"
+                          onClick={() => appendPinDigit("0")}
+                          fullWidth
+                          sx={{
+                            py: 1.5,
+                            color: "#ffd76a",
+                            borderColor: "rgba(247, 201, 72, 0.6)",
+                            backgroundColor: "rgba(247, 201, 72, 0.08)",
+                            boxShadow: "inset 0 1px 0 rgba(255, 255, 255, 0.15)",
+                            "&:hover": {
+                              borderColor: "#f7c948",
+                              backgroundColor: "rgba(247, 201, 72, 0.16)"
+                            },
+                            textShadow: "0 0 6px rgba(255, 215, 106, 0.55)"
+                          }}
+                        >
+                          0
+                        </Button>
+                      </Grid>
+                      <Grid item xs={4}>
+                        <Button
+                          variant="outlined"
+                          onClick={backspacePin}
+                          fullWidth
+                          sx={{
+                            py: 1.5,
+                            color: "#ffd76a",
+                            borderColor: "rgba(247, 201, 72, 0.6)",
+                            backgroundColor: "rgba(247, 201, 72, 0.08)",
+                            boxShadow: "inset 0 1px 0 rgba(255, 255, 255, 0.15)",
+                            "&:hover": {
+                              borderColor: "#f7c948",
+                              backgroundColor: "rgba(247, 201, 72, 0.16)"
+                            },
+                            textShadow: "0 0 6px rgba(255, 215, 106, 0.55)"
+                          }}
+                        >
+                          <BackspaceIcon />
+                        </Button>
+                      </Grid>
+                    </Grid>
                     {!pinReady && (
                       <TextField
                         label="Confirmar PIN"
@@ -292,21 +429,47 @@ export default function App() {
                         onChange={(event) => setPinConfirm(event.target.value)}
                         inputProps={{ inputMode: "numeric", pattern: "[0-9]*", maxLength: 6 }}
                         fullWidth
+                        sx={{ maxWidth: 420 }}
                       />
                     )}
-                    {pinError && <Typography color="error">{pinError}</Typography>}
+                    {pinError && <Typography color="error" textAlign="center">{pinError}</Typography>}
                     {pinReady ? (
-                      <Button variant="contained" onClick={handleUnlock} disabled={pinInput.length < 4} fullWidth>
+                      <Button
+                        variant="contained"
+                        onClick={handleUnlock}
+                        disabled={pinInput.length < 4}
+                        fullWidth
+                        sx={{
+                          maxWidth: 420,
+                          "&.Mui-disabled": {
+                            backgroundColor: "rgba(255, 255, 255, 0.25)",
+                            color: "rgba(255, 255, 255, 0.7)"
+                          }
+                        }}
+                      >
                         Entrar
                       </Button>
                     ) : (
-                      <Button variant="contained" onClick={handleSetPin} disabled={pinInput.length < 4} fullWidth>
+                      <Button
+                        variant="contained"
+                        onClick={handleSetPin}
+                        disabled={pinInput.length < 4}
+                        fullWidth
+                        sx={{
+                          maxWidth: 420,
+                          "&.Mui-disabled": {
+                            backgroundColor: "rgba(255, 255, 255, 0.25)",
+                            color: "rgba(255, 255, 255, 0.7)"
+                          }
+                        }}
+                      >
                         Salvar PIN
                       </Button>
                     )}
                   </Stack>
                 </CardContent>
               </Card>
+              </Box>
             </Box>
           </Dialog>
           <AppBar position="sticky" color="primary">
@@ -324,13 +487,15 @@ export default function App() {
                 </IconButton>
               </Tooltip>
             </Toolbar>
-          <Tabs
-            value={tab}
-            onChange={(_, value) => setTab(value)}
-            variant="fullWidth"
-            textColor="inherit"
-            indicatorColor="secondary"
-          >
+        <Tabs
+          value={tab}
+          onChange={(_, value) => setTab(value)}
+          variant="scrollable"
+          scrollButtons="auto"
+          allowScrollButtonsMobile
+          textColor="inherit"
+          indicatorColor="secondary"
+        >
             <Tab label="Início" />
             <Tab label="Produtos" />
             <Tab label="Clientes" />
@@ -339,17 +504,33 @@ export default function App() {
           </Tabs>
         </AppBar>
 
-        <Container sx={{ py: 2 }} maxWidth="sm">
-          {tab === 0 ? <HomeModule onOpenComanda={(id) => {
-            setSelectedComandaFromHome(id);
-            setTab(3);
-          }} /> : null}
+        <Container
+          sx={{ pt: 2.5, pb: 2, px: { xs: 1, sm: 1.5, md: 2 } }}
+          maxWidth="lg"
+        >
+          {tab === 0 ? (
+            <HomeModule
+              onOpenComanda={(id) => {
+                setSelectedComandaFromHome(id);
+                setTab(3);
+              }}
+              onOpenComandaWithSale={(id, productId) => {
+                setSelectedComandaFromHome(id);
+                setInitialSaleProductId(productId);
+                setTab(3);
+              }}
+            />
+          ) : null}
           {tab === 1 ? <ProductsModule /> : null}
           {tab === 2 ? <CustomersModule /> : null}
           {tab === 3 ? (
             <ComandasModule
               initialOpenComandaId={selectedComandaFromHome}
-              onOpenedFromHome={() => setSelectedComandaFromHome(null)}
+              initialSaleProductId={initialSaleProductId}
+              onOpenedFromHome={() => {
+                setSelectedComandaFromHome(null);
+                setInitialSaleProductId(null);
+              }}
             />
           ) : null}
           {tab === 4 ? <ReportsModule /> : null}
@@ -368,6 +549,12 @@ function ProductsModule() {
 
   const [groupFilter, setGroupFilter] = useState<number>(0);
   const [subgroupFilter, setSubgroupFilter] = useState<number>(0);
+  const [sortBy, setSortBy] = useState("name-asc");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [viewMode, setViewMode] = useState<"list" | "grid">(() => {
+    const saved = localStorage.getItem("boteco_products_view");
+    return saved === "grid" ? "grid" : "list";
+  });
 
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -395,14 +582,31 @@ function ProductsModule() {
 
   const filteredProducts = useMemo(() => {
     const list = products ?? [];
-    return list.filter((product) => {
+    const normalizedSearch = searchTerm.trim().toLowerCase();
+    const filtered = list.filter((product) => {
+      if (normalizedSearch && !product.name.toLowerCase().includes(normalizedSearch)) return false;
       if (groupFilter && product.groupId !== groupFilter) return false;
       if (!groupFilter) return true;
       if (!subgroupFilter) return true;
       if (subgroupFilter === -1) return !product.subgroupId;
       return product.subgroupId === subgroupFilter;
     });
-  }, [products, groupFilter, subgroupFilter]);
+    const sorted = [...filtered];
+    sorted.sort((a, b) => {
+      switch (sortBy) {
+        case "name-desc":
+          return b.name.localeCompare(a.name);
+        case "price-asc":
+          return a.unitPrice - b.unitPrice;
+        case "price-desc":
+          return b.unitPrice - a.unitPrice;
+        case "name-asc":
+        default:
+          return a.name.localeCompare(b.name);
+      }
+    });
+    return sorted;
+  }, [products, groupFilter, subgroupFilter, sortBy, searchTerm]);
 
   const handleOpenNew = () => {
     setEditingId(null);
@@ -414,23 +618,31 @@ function ProductsModule() {
     setOpen(true);
   };
 
+  useEffect(() => {
+    localStorage.setItem("boteco_products_view", viewMode);
+  }, [viewMode]);
+
   return (
     <Box>
       <Stack spacing={2}>
-        <Stack direction="row" spacing={1} alignItems="center">
+        <Stack
+          direction={{ xs: "column", md: "row" }}
+          spacing={1}
+          alignItems={{ xs: "stretch", md: "center" }}
+        >
           <FormControl fullWidth size="small">
-            <InputLabel id="group-filter">Grupo</InputLabel>
+            <InputLabel id="group-filter">Categoria</InputLabel>
             <Select
               labelId="group-filter"
               value={groupFilter}
-              label="Grupo"
+              label="Categoria"
               onChange={(event) => {
                 const value = Number(event.target.value);
                 setGroupFilter(value);
                 setSubgroupFilter(0);
               }}
             >
-              <MenuItem value={0}>Todos</MenuItem>
+              <MenuItem value={0}>Todas</MenuItem>
               {(groups ?? []).map((group) => (
                 <MenuItem key={group.id} value={group.id ?? 0}>
                   {group.name}
@@ -439,14 +651,14 @@ function ProductsModule() {
             </Select>
           </FormControl>
           <FormControl fullWidth size="small" disabled={!groupFilter}>
-            <InputLabel id="subgroup-filter">Subgrupo</InputLabel>
+            <InputLabel id="subgroup-filter">Subcategoria</InputLabel>
             <Select
               labelId="subgroup-filter"
               value={subgroupFilter}
-              label="Subgrupo"
+              label="Subcategoria"
               onChange={(event) => setSubgroupFilter(Number(event.target.value))}
             >
-              <MenuItem value={0}>Todos</MenuItem>
+              <MenuItem value={0}>Todas</MenuItem>
               <MenuItem value={-1}>Sem subgrupo</MenuItem>
               {availableSubgroups.map((subgroup) => (
                 <MenuItem key={subgroup.id} value={subgroup.id ?? 0}>
@@ -455,60 +667,216 @@ function ProductsModule() {
               ))}
             </Select>
           </FormControl>
+          <FormControl fullWidth size="small">
+            <InputLabel id="sort-products">Ordenar</InputLabel>
+            <Select
+              labelId="sort-products"
+              value={sortBy}
+              label="Ordenar"
+              onChange={(event) => setSortBy(String(event.target.value))}
+            >
+              <MenuItem value="name-asc">Nome (A-Z)</MenuItem>
+              <MenuItem value="name-desc">Nome (Z-A)</MenuItem>
+              <MenuItem value="price-asc">Menor preço</MenuItem>
+              <MenuItem value="price-desc">Maior preço</MenuItem>
+            </Select>
+          </FormControl>
+          <TextField
+            size="small"
+            label="Buscar produto"
+            value={searchTerm}
+            onChange={(event) => setSearchTerm(event.target.value)}
+            fullWidth
+          />
+          <Stack direction="row" spacing={1} alignItems="center" justifyContent="flex-end">
+            <ToggleButtonGroup
+              value={viewMode}
+              exclusive
+              onChange={(_, value) => {
+                if (value) setViewMode(value);
+              }}
+              size="small"
+            >
+              <ToggleButton value="list" aria-label="Lista detalhada">
+                <ViewListIcon />
+              </ToggleButton>
+              <ToggleButton value="grid" aria-label="Grid">
+                <GridViewIcon />
+              </ToggleButton>
+            </ToggleButtonGroup>
+            <Button variant="contained" onClick={handleOpenNew}>
+              Novo
+            </Button>
+          </Stack>
         </Stack>
 
-        <Button variant="contained" onClick={handleOpenNew}>
-          Novo
-        </Button>
-
-        <List sx={{ bgcolor: "white", borderRadius: 2, boxShadow: 1 }}>
-          {filteredProducts.length === 0 ? (
-            <ListItem>
-              <ListItemText primary="Nenhum produto cadastrado." />
-            </ListItem>
-          ) : (
-            filteredProducts.map((product) => (
-              <ListItem key={product.id} divider disablePadding>
-                <ListItemButton
-                  sx={{ alignItems: "flex-start" }}
-                  onClick={() => product.id && handleEdit(product.id)}
-                >
-                  <ListItemText
-                    primary={
-                      <Stack direction="row" spacing={1} alignItems="center">
-                        <Typography variant="subtitle1" fontWeight={600}>
-                          {product.name}
-                        </Typography>
-                        <Typography variant="subtitle1" color="text.secondary">
-                          {format(product.unitPrice)}
-                        </Typography>
-                      </Stack>
-                    }
-                    secondary={
-                      <Stack direction="row" spacing={1} sx={{ mt: 1, flexWrap: "wrap" }}>
-                        <Chip label={groupMap.get(product.groupId)?.name ?? "Grupo"} size="small" />
-                        {product.subgroupId ? (
-                          <Chip
-                            label={subgroupMap.get(product.subgroupId)?.name ?? "Subgrupo"}
-                            size="small"
+        {viewMode === "list" ? (
+          <List sx={{ bgcolor: "white", borderRadius: 2, boxShadow: 1 }}>
+            {filteredProducts.length === 0 ? (
+              <ListItem>
+                <ListItemText primary="Nenhum produto cadastrado." />
+              </ListItem>
+            ) : (
+              filteredProducts.map((product) => (
+                <ListItem key={product.id} divider disablePadding>
+                  <ListItemButton
+                    sx={{ alignItems: "flex-start" }}
+                    onClick={() => product.id && handleEdit(product.id)}
+                  >
+                    <ListItemText
+                      primary={
+                        <Stack direction="row" spacing={1.5} alignItems="center">
+                          {product.imageUrl ? (
+                            <Box
+                              component="img"
+                              src={product.imageUrl}
+                              alt={product.name}
+                              sx={{
+                                width: 48,
+                                height: 48,
+                                borderRadius: 1,
+                                objectFit: "cover",
+                                flexShrink: 0,
+                                bgcolor: "#e2e8f0"
+                              }}
+                            />
+                          ) : (
+                            <Box
+                              sx={{
+                                width: 48,
+                                height: 48,
+                                borderRadius: 1,
+                                bgcolor: "#e2e8f0",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                fontWeight: 700,
+                                color: "#0f172a",
+                                flexShrink: 0
+                              }}
+                            >
+                              {product.name.slice(0, 2).toUpperCase()}
+                            </Box>
+                          )}
+                          <Stack spacing={0.2}>
+                            <Typography variant="subtitle1" fontWeight={600}>
+                              {product.name}
+                            </Typography>
+                            <Typography variant="subtitle1" color="text.secondary">
+                              {format(product.unitPrice)}
+                            </Typography>
+                          </Stack>
+                        </Stack>
+                      }
+                      secondary={
+                        <Stack direction="row" spacing={1} sx={{ mt: 1, flexWrap: "wrap" }}>
+                          <Chip label={groupMap.get(product.groupId)?.name ?? "Grupo"} size="small" />
+                          {product.subgroupId ? (
+                            <Chip
+                              label={subgroupMap.get(product.subgroupId)?.name ?? "Subgrupo"}
+                              size="small"
+                            />
+                          ) : (
+                            <Chip label="Sem subgrupo" size="small" variant="outlined" />
+                          )}
+                          {product.sellsFractioned && (
+                            <Chip label="Fracionado" size="small" color="success" />
+                          )}
+                          {!product.active && (
+                            <Chip label="Inativo" size="small" color="warning" />
+                          )}
+                        </Stack>
+                      }
+                    />
+                  </ListItemButton>
+                </ListItem>
+              ))
+            )}
+          </List>
+        ) : (
+          <Grid container spacing={2}>
+            {filteredProducts.length === 0 ? (
+              <Grid item xs={12}>
+                <Card sx={{ borderRadius: 2, boxShadow: 1 }}>
+                  <CardContent>
+                    <Typography>Nenhum produto cadastrado.</Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+            ) : (
+              filteredProducts.map((product) => (
+                <Grid key={product.id} item xs={12} sm={6} md={4}>
+                  <Card sx={{ borderRadius: 2, boxShadow: 1, height: "100%" }}>
+                    <CardActionArea
+                      sx={{ height: "100%", alignItems: "stretch" }}
+                      onClick={() => product.id && handleEdit(product.id)}
+                    >
+                      <Stack sx={{ height: "100%" }}>
+                        {product.imageUrl ? (
+                          <Box
+                            component="img"
+                            src={product.imageUrl}
+                            alt={product.name}
+                            sx={{
+                              width: "100%",
+                              height: 140,
+                              objectFit: "cover",
+                              borderTopLeftRadius: 8,
+                              borderTopRightRadius: 8,
+                              bgcolor: "#e2e8f0"
+                            }}
                           />
                         ) : (
-                          <Chip label="Sem subgrupo" size="small" variant="outlined" />
+                          <Box
+                            sx={{
+                              width: "100%",
+                              height: 140,
+                              bgcolor: "#e2e8f0",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              fontWeight: 700,
+                              color: "#0f172a"
+                            }}
+                          >
+                            {product.name.slice(0, 2).toUpperCase()}
+                          </Box>
                         )}
-                        {product.sellsFractioned && (
-                          <Chip label="Fracionado" size="small" color="success" />
-                        )}
-                        {!product.active && (
-                          <Chip label="Inativo" size="small" color="warning" />
-                        )}
+                        <CardContent>
+                          <Stack spacing={1}>
+                            <Typography variant="subtitle1" fontWeight={600}>
+                              {product.name}
+                            </Typography>
+                            <Typography variant="subtitle2" color="text.secondary">
+                              {format(product.unitPrice)}
+                            </Typography>
+                            <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap" }}>
+                              <Chip label={groupMap.get(product.groupId)?.name ?? "Grupo"} size="small" />
+                              {product.subgroupId ? (
+                                <Chip
+                                  label={subgroupMap.get(product.subgroupId)?.name ?? "Subgrupo"}
+                                  size="small"
+                                />
+                              ) : (
+                                <Chip label="Sem subgrupo" size="small" variant="outlined" />
+                              )}
+                              {product.sellsFractioned && (
+                                <Chip label="Fracionado" size="small" color="success" />
+                              )}
+                              {!product.active && (
+                                <Chip label="Inativo" size="small" color="warning" />
+                              )}
+                            </Stack>
+                          </Stack>
+                        </CardContent>
                       </Stack>
-                    }
-                  />
-                </ListItemButton>
-              </ListItem>
-            ))
-          )}
-        </List>
+                    </CardActionArea>
+                  </Card>
+                </Grid>
+              ))
+            )}
+          </Grid>
+        )}
       </Stack>
 
       <ProductDialog
@@ -696,9 +1064,20 @@ function ProductDialog({
   );
 }
 
-function HomeModule({ onOpenComanda }: { onOpenComanda: (id: number) => void }) {
+function HomeModule({
+  onOpenComanda,
+  onOpenComandaWithSale
+}: {
+  onOpenComanda: (id: number) => void;
+  onOpenComandaWithSale: (id: number, productId: number) => void;
+}) {
   const { format } = useAmountVisibility();
   const customers = useLiveQuery(() => db.customers.toArray(), []);
+  const products = useLiveQuery(() => db.products.toArray(), []);
+  const favoriteProducts = useLiveQuery(async () => {
+    const list = await db.products.toArray();
+    return list.filter((product) => product.favorite);
+  }, []);
   const openComandas = useLiveQuery(
     () =>
       db.transaction("r", db.comandas, db.sales, db.sale_items, db.payments, async () => {
@@ -744,9 +1123,95 @@ function HomeModule({ onOpenComanda }: { onOpenComanda: (id: number) => void }) 
     const list = await db.customers.toArray();
     return list.filter((customer) => customer.favorite);
   }, []);
+  const topProducts = useLiveQuery(async () => {
+    const [items, products] = await Promise.all([
+      db.sale_items.toArray(),
+      db.products.toArray()
+    ]);
+    const productMap = new Map<number, Product>();
+    products.forEach((product) => {
+      if (product.id) productMap.set(product.id, product);
+    });
+    const totals = new Map<number, number>();
+    items.forEach((item) => {
+      totals.set(item.productId, (totals.get(item.productId) ?? 0) + item.quantity);
+    });
+    return Array.from(totals.entries())
+      .map(([productId, quantity]) => ({
+        product: productMap.get(productId),
+        quantity
+      }))
+      .filter((entry): entry is { product: Product; quantity: number } => Boolean(entry.product))
+      .sort((a, b) => b.quantity - a.quantity)
+      .slice(0, 12);
+  }, []);
+
+  const favoriteCategories = useMemo(() => {
+    const order = [
+      "Cervejas",
+      "Destilados",
+      "Não alcoólicos",
+      "Snacks salgados",
+      "Salgados rápidos",
+      "Doces de balcão",
+      "Extras de conveniência"
+    ];
+    const categoryByName = (product: Product) => {
+      const name = product.name.toLowerCase();
+      if (name.includes("cerveja") || name.includes("skol") || name.includes("brahma") || name.includes("antarctica") || name.includes("itaipava") || name.includes("heineken")) {
+        return "Cervejas";
+      }
+      if (name.includes("dose") || name.includes("whisky") || name.includes("vodka") || name.includes("conhaque") || name.includes("corote")) {
+        return "Destilados";
+      }
+      if (name.includes("coca") || name.includes("guaran") || name.includes("água") || name.includes("suco")) {
+        return "Não alcoólicos";
+      }
+      if (name.includes("amendoim") || name.includes("batata frita") || name.includes("calabresa") || name.includes("frango") || name.includes("torresmo")) {
+        return "Snacks salgados";
+      }
+      if (name.includes("pastel") || name.includes("coxinha") || name.includes("espetinho") || name.includes("hambúrguer")) {
+        return "Salgados rápidos";
+      }
+      if (name.includes("bala") || name.includes("chiclete") || name.includes("paçoca") || name.includes("chocolate") || name.includes("picolé")) {
+        return "Doces de balcão";
+      }
+      return "Extras de conveniência";
+    };
+    const map = new Map<string, Product[]>();
+    (favoriteProducts ?? []).forEach((product) => {
+      const category = categoryByName(product);
+      if (!map.has(category)) map.set(category, []);
+      map.get(category)?.push(product);
+    });
+    return order
+      .map((name) => ({ name, products: map.get(name) ?? [] }))
+      .filter((category) => category.products.length > 0);
+  }, [favoriteProducts]);
+
+  const handleQuickSaleClick = (productName: string) => {
+    const product = productByName.get(productName.toLowerCase());
+    if (!product?.id) {
+      window.alert("Produto não encontrado no catálogo. Cadastre primeiro.");
+      return;
+    }
+    setQuickSaleProductId(product.id);
+    setQuickSaleCustomerId(null);
+    setQuickSaleDialogOpen(true);
+  };
   const [openQuickComanda, setOpenQuickComanda] = useState(false);
   const [searchCustomer, setSearchCustomer] = useState("");
   const [openNewCustomer, setOpenNewCustomer] = useState(false);
+  const [quickSaleDialogOpen, setQuickSaleDialogOpen] = useState(false);
+  const [quickSaleProductId, setQuickSaleProductId] = useState<number | null>(null);
+  const [quickSaleCustomerId, setQuickSaleCustomerId] = useState<number | null>(null);
+  const [quickSaleComandaId, setQuickSaleComandaId] = useState<number | null>(null);
+  const [openQuickSaleForm, setOpenQuickSaleForm] = useState(false);
+  const [openQuickSalePayment, setOpenQuickSalePayment] = useState(false);
+  const [quickSaleDueAmount, setQuickSaleDueAmount] = useState(0);
+  const [quickSalePendingPayment, setQuickSalePendingPayment] = useState(false);
+  const [quickSaleCustomerSearch, setQuickSaleCustomerSearch] = useState("");
+  const [homeProductSearch, setHomeProductSearch] = useState("");
 
   const handleOpenCustomerComanda = async (customerId?: number) => {
     if (!customerId) return;
@@ -782,43 +1247,77 @@ function HomeModule({ onOpenComanda }: { onOpenComanda: (id: number) => void }) 
     return map;
   }, [customers]);
 
+  const productByName = useMemo(() => {
+    const map = new Map<string, Product>();
+    (products ?? []).forEach((product) => {
+      if (!product.id) return;
+      map.set(product.name.toLowerCase(), product);
+    });
+    return map;
+  }, [products]);
+
   return (
     <Stack spacing={3}>
-      <Button variant="contained" onClick={() => setOpenQuickComanda(true)}>
-        Abrir comanda
-      </Button>
-      <Stack spacing={1}>
-        <Typography variant="subtitle1" fontWeight={700}>
-          Comandas abertas
-        </Typography>
-        {(openComandas ?? []).length === 0 ? (
-          <Typography color="text.secondary">Nenhuma comanda aberta no momento.</Typography>
-        ) : (
-          <Grid container spacing={1}>
-            {(openComandas ?? []).slice(0, 6).map(({ comanda, totals }) => (
-              <Grid key={comanda.id} item xs={6}>
-                <Card sx={{ bgcolor: "#fff" }}>
-                  <CardActionArea onClick={() => comanda.id && onOpenComanda(comanda.id)}>
-                    <CardContent>
-                      <Stack spacing={0.5}>
-                        <Typography fontWeight={700}>
-                          {comanda.customerId ? customerMap.get(comanda.customerId)?.name ?? "Cliente" : "Cliente"}
-                        </Typography>
-                        <Typography
-                          fontWeight={700}
-                          color={totals.balance > 0 ? "warning.main" : "success.main"}
-                        >
-                          {format(totals.balance)}
-                        </Typography>
-                      </Stack>
-                    </CardContent>
-                  </CardActionArea>
-                </Card>
+      <Box
+        sx={{
+          display: { xs: "block", md: "grid" },
+          gridTemplateColumns: { md: "1fr 2fr" },
+          gap: { xs: 2, md: 2 },
+          alignItems: "start"
+        }}
+      >
+        <Box sx={{ minWidth: 0 }}>
+          <Stack spacing={1} alignItems="flex-start">
+            <Button
+              variant="contained"
+              onClick={() => setOpenQuickComanda(true)}
+              sx={{ width: 62, height: 62, minWidth: 62, borderRadius: 2 }}
+              aria-label="Abrir comanda"
+            >
+              <AddIcon fontSize="medium" />
+            </Button>
+            <Typography variant="caption" color="text.secondary">
+              Abrir comanda
+            </Typography>
+          </Stack>
+        </Box>
+        <Box sx={{ minWidth: 0 }}>
+          <Stack spacing={1}>
+            <Typography variant="subtitle1" fontWeight={700}>
+              Comandas abertas
+            </Typography>
+            {(openComandas ?? []).length === 0 ? (
+              <Typography color="text.secondary">Nenhuma comanda aberta no momento.</Typography>
+            ) : (
+              <Grid container spacing={0.5}>
+                {(openComandas ?? []).slice(0, 6).map(({ comanda, totals }) => (
+                  <Grid key={comanda.id} item xs={6}>
+                    <Card sx={{ bgcolor: "#fff" }}>
+                      <CardActionArea onClick={() => comanda.id && onOpenComanda(comanda.id)}>
+                        <CardContent>
+                          <Stack spacing={0.5}>
+                            <Typography fontWeight={700}>
+                              {comanda.customerId
+                                ? customerMap.get(comanda.customerId)?.name ?? "Cliente"
+                                : "Cliente"}
+                            </Typography>
+                            <Typography
+                              fontWeight={700}
+                              color={totals.balance > 0 ? "warning.main" : "success.main"}
+                            >
+                              {format(totals.balance)}
+                            </Typography>
+                          </Stack>
+                        </CardContent>
+                      </CardActionArea>
+                    </Card>
+                  </Grid>
+                ))}
               </Grid>
-            ))}
-          </Grid>
-        )}
-      </Stack>
+            )}
+          </Stack>
+        </Box>
+      </Box>
 
       <Stack spacing={1}>
         <Typography variant="subtitle1" fontWeight={700}>
@@ -827,7 +1326,7 @@ function HomeModule({ onOpenComanda }: { onOpenComanda: (id: number) => void }) 
         {((favoriteCustomers ?? []).length === 0 && (frequentCustomers ?? []).length === 0) ? (
           <Typography color="text.secondary">Sem clientes em destaque ainda.</Typography>
         ) : (
-          <Grid container spacing={1}>
+          <Grid container spacing={0.5}>
             {(() => {
               const favorites = (favoriteCustomers ?? []).map((customer) => ({
                 customer,
@@ -865,6 +1364,155 @@ function HomeModule({ onOpenComanda }: { onOpenComanda: (id: number) => void }) 
         )}
       </Stack>
 
+        <Box sx={{ minWidth: 0 }}>
+          <Stack spacing={1}>
+            <Stack
+              direction={{ xs: "column", sm: "row" }}
+              spacing={1}
+              alignItems={{ xs: "stretch", sm: "center" }}
+              justifyContent="space-between"
+            >
+              <Typography variant="subtitle1" fontWeight={700}>
+                Produtos em destaque
+              </Typography>
+              <TextField
+                size="small"
+                label="Buscar produto"
+                value={homeProductSearch}
+                onChange={(event) => setHomeProductSearch(event.target.value)}
+                sx={{ minWidth: { sm: 220 } }}
+              />
+            </Stack>
+            {(() => {
+              const term = homeProductSearch.trim().toLowerCase();
+              const sold = (topProducts ?? []).map((item) => ({
+                product: item.product,
+                label: `Saída: ${item.quantity}`
+              }));
+              const soldIds = new Set(sold.map((item) => item.product.id));
+              const favoritesFlat = favoriteCategories.flatMap((category) =>
+                category.products.map((product) => ({
+                  product,
+                  label: format(product.unitPrice)
+                }))
+              );
+              const merged = [
+                ...favoritesFlat,
+                ...sold.filter((item) => !favoritesFlat.some((fav) => fav.product.id === item.product.id))
+              ];
+
+              const baseList =
+                term.length > 0
+                  ? (products ?? [])
+                      .filter((product) => product.name.toLowerCase().includes(term))
+                      .map((product) => ({
+                        product,
+                        label: format(product.unitPrice)
+                      }))
+                  : merged;
+
+              const sortedList =
+                term.length > 0
+                  ? baseList
+                  : [
+                      ...baseList.filter((item) => item.product.favorite),
+                      ...baseList.filter((item) => !item.product.favorite)
+                    ];
+
+              if (sortedList.length === 0) {
+                return <Typography color="text.secondary">Sem produtos para exibir.</Typography>;
+              }
+              return (
+                <Grid container spacing={0.5}>
+                  {sortedList.map((item) => (
+                    <Grid key={item.product.id} item xs={6} sm={4} lg={3}>
+                      <Card
+                        sx={{
+                          bgcolor: "#fff",
+                          width: "94%",
+                          border: item.product.favorite ? "1px solid #2f855a" : "1px solid transparent",
+                          boxShadow: item.product.favorite ? 2 : 1
+                        }}
+                      >
+                        <CardActionArea onClick={() => handleQuickSaleClick(item.product.name)}>
+                          <CardContent sx={{ p: 1 }}>
+                            <Stack spacing={1}>
+                              <Stack direction="row" spacing={1} alignItems="center">
+                                {item.product.imageUrl ? (
+                                  <Box
+                                    component="img"
+                                    src={item.product.imageUrl}
+                                    alt={item.product.name}
+                                    sx={{
+                                      width: 44,
+                                      height: 44,
+                                      borderRadius: 1,
+                                      objectFit: "cover",
+                                      flexShrink: 0,
+                                      bgcolor: "#e2e8f0"
+                                    }}
+                                  />
+                                ) : (
+                                  <Box
+                                    sx={{
+                                      width: 44,
+                                      height: 44,
+                                      borderRadius: 1,
+                                      bgcolor: "#e2e8f0",
+                                      display: "flex",
+                                      alignItems: "center",
+                                      justifyContent: "center",
+                                      fontWeight: 700,
+                                      color: "#0f172a",
+                                      flexShrink: 0
+                                    }}
+                                  >
+                                    {item.product.name.slice(0, 2).toUpperCase()}
+                                  </Box>
+                                )}
+                                <Typography fontWeight={600} noWrap sx={{ flexGrow: 1 }}>
+                                  {item.product.name}
+                                </Typography>
+                                {item.product.favorite && (
+                                  <Chip
+                                    label="Favorito"
+                                    size="small"
+                                    color="success"
+                                    sx={{ height: 22 }}
+                                  />
+                                )}
+                                <IconButton
+                                  size="small"
+                                  onClick={async (event) => {
+                                    event.stopPropagation();
+                                    if (!item.product.id) return;
+                                    await db.products.update(item.product.id, {
+                                      favorite: !item.product.favorite
+                                    });
+                                  }}
+                                  aria-label={
+                                    item.product.favorite ? "Remover favorito" : "Marcar favorito"
+                                  }
+                                >
+                                  {item.product.favorite ? (
+                                    <FavoriteIcon color="error" fontSize="small" />
+                                  ) : (
+                                    <FavoriteBorderIcon fontSize="small" />
+                                  )}
+                                </IconButton>
+                              </Stack>
+                              <Chip label={item.label} size="small" />
+                            </Stack>
+                          </CardContent>
+                        </CardActionArea>
+                      </Card>
+                    </Grid>
+                  ))}
+                </Grid>
+              );
+            })()}
+          </Stack>
+        </Box>
       <Dialog open={openQuickComanda} onClose={() => setOpenQuickComanda(false)} fullWidth maxWidth="sm">
         <DialogTitle>Abrir comanda</DialogTitle>
         <DialogContent>
@@ -972,6 +1620,143 @@ function HomeModule({ onOpenComanda }: { onOpenComanda: (id: number) => void }) 
           await handleOpenCustomerComanda(id);
           setOpenNewCustomer(false);
           setOpenQuickComanda(false);
+        }}
+      />
+
+      <Dialog open={quickSaleDialogOpen} onClose={() => setQuickSaleDialogOpen(false)} fullWidth maxWidth="sm">
+        <DialogTitle>Registrar venda rápida</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            <Typography>
+              Produto selecionado:{" "}
+              <strong>
+                {quickSaleProductId
+                  ? products?.find((p) => p.id === quickSaleProductId)?.name ?? "Produto"
+                  : "Produto"}
+              </strong>
+            </Typography>
+            <TextField
+              label="Buscar cliente"
+              value={quickSaleCustomerSearch}
+              onChange={(event) => setQuickSaleCustomerSearch(event.target.value)}
+              size="small"
+            />
+            <FormControl fullWidth>
+              <InputLabel id="quick-sale-customer">Cliente (opcional)</InputLabel>
+              <Select
+                labelId="quick-sale-customer"
+                value={quickSaleCustomerId ?? ""}
+                label="Cliente (opcional)"
+                onChange={(event) => setQuickSaleCustomerId(Number(event.target.value) || null)}
+              >
+                {(customers ?? [])
+                  .filter((customer) =>
+                    quickSaleCustomerSearch.trim() === ""
+                      ? true
+                      : customer.name.toLowerCase().includes(quickSaleCustomerSearch.trim().toLowerCase())
+                  )
+                  .map((customer) => (
+                    <MenuItem key={customer.id} value={customer.id ?? 0}>
+                      {customer.name}
+                    </MenuItem>
+                  ))}
+              </Select>
+            </FormControl>
+            <Typography variant="body2" color="text.secondary">
+              Se selecionar um cliente, a venda será registrada na comanda dele.
+            </Typography>
+          </Stack>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={() => setQuickSaleDialogOpen(false)}>Cancelar</Button>
+          <Button
+            variant="outlined"
+            onClick={async () => {
+              if (!quickSaleProductId) return;
+              const now = nowIso();
+              const comandaId = await db.comandas.add({
+                customerId: null,
+                openedAt: now,
+                closedAt: null,
+                status: "OPEN",
+                notes: "Venda avulsa"
+              });
+              setQuickSaleComandaId(comandaId);
+              setQuickSalePendingPayment(false);
+              setOpenQuickSaleForm(true);
+              setQuickSaleDialogOpen(false);
+            }}
+          >
+            Venda avulsa
+          </Button>
+          <Button
+            variant="contained"
+            disabled={!quickSaleCustomerId}
+            onClick={async () => {
+              if (!quickSaleCustomerId || !quickSaleProductId) return;
+              const existing = await db.comandas
+                .where("status")
+                .equals("OPEN")
+                .and((comanda) => comanda.customerId === quickSaleCustomerId)
+                .first();
+              const comandaId = existing?.id
+                ? existing.id
+                : await db.comandas.add({
+                    customerId: quickSaleCustomerId,
+                    openedAt: nowIso(),
+                    closedAt: null,
+                    status: "OPEN"
+                  });
+              setQuickSaleDialogOpen(false);
+              onOpenComandaWithSale(comandaId, quickSaleProductId);
+            }}
+          >
+            Ir para comanda
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <AddSaleDialog
+        open={openQuickSaleForm}
+        onClose={() => {
+          setOpenQuickSaleForm(false);
+          if (!quickSalePendingPayment && quickSaleComandaId) {
+            db.comandas.delete(quickSaleComandaId);
+            setQuickSaleComandaId(null);
+          }
+        }}
+        comandaId={quickSaleComandaId ?? 0}
+        initialProductId={quickSaleProductId ?? undefined}
+        onSaved={(saleTotal) => {
+          setQuickSaleDueAmount(saleTotal);
+          setQuickSalePendingPayment(true);
+          setOpenQuickSalePayment(true);
+        }}
+      />
+
+      <AddPaymentDialog
+        open={openQuickSalePayment}
+        onClose={() => {
+          setOpenQuickSalePayment(false);
+          setQuickSaleDueAmount(0);
+          setQuickSalePendingPayment(false);
+          setQuickSaleComandaId(null);
+        }}
+        comandaId={quickSaleComandaId ?? 0}
+        dueAmount={quickSaleDueAmount}
+        initialAmount={quickSaleDueAmount}
+        onSaved={async (amount) => {
+          if (!quickSaleComandaId) return;
+          if (amount >= quickSaleDueAmount) {
+            await db.comandas.update(quickSaleComandaId, {
+              status: "CLOSED",
+              closedAt: nowIso()
+            });
+          }
+          setOpenQuickSalePayment(false);
+          setQuickSaleDueAmount(0);
+          setQuickSalePendingPayment(false);
+          setQuickSaleComandaId(null);
         }}
       />
     </Stack>
@@ -1420,9 +2205,11 @@ function CustomerDialog({
 
 function ComandasModule({
   initialOpenComandaId,
+  initialSaleProductId,
   onOpenedFromHome
 }: {
   initialOpenComandaId: number | null;
+  initialSaleProductId: number | null;
   onOpenedFromHome: () => void;
 }) {
   const { format } = useAmountVisibility();
@@ -1522,6 +2309,7 @@ function ComandasModule({
         comandaId={selectedComandaId}
         onClose={() => setSelectedComandaId(null)}
         customerMap={customerMap}
+        initialProductId={initialSaleProductId}
       />
     </Box>
   );
@@ -1620,11 +2408,13 @@ function NewComandaDialog({
 function ComandaDetails({
   comandaId,
   onClose,
-  customerMap
+  customerMap,
+  initialProductId
 }: {
   comandaId: number | null;
   onClose: () => void;
   customerMap: Map<number, Customer>;
+  initialProductId?: number | null;
 }) {
   const { format, show, toggle } = useAmountVisibility();
   const comanda = useLiveQuery(
@@ -1662,6 +2452,7 @@ function ComandaDetails({
 
   const [openSale, setOpenSale] = useState(false);
   const [openPayment, setOpenPayment] = useState(false);
+  const [prefillProductId, setPrefillProductId] = useState<number | null>(null);
 
   const productMap = useMemo(() => {
     const map = new Map<number, Product>();
@@ -1679,6 +2470,24 @@ function ComandaDetails({
     });
     return map;
   }, [saleItems]);
+
+  useEffect(() => {
+    if (!initialProductId) return;
+    setPrefillProductId(initialProductId);
+    setOpenSale(true);
+  }, [initialProductId]);
+
+  useEffect(() => {
+    if (!comandaId) return;
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [comandaId, onClose]);
 
   if (!comandaId || !comanda) return null;
 
@@ -1706,6 +2515,9 @@ function ComandaDetails({
             <Typography variant="body2" color="text.secondary">
               {comanda.status === "OPEN" ? "Aberta" : "Fechada"} em {formatDateTime(comanda.openedAt)}
             </Typography>
+            <Typography variant="caption" color="text.secondary">
+              Pressione Esc para voltar
+            </Typography>
           </Box>
           <Tooltip title={show ? "Ocultar valores" : "Mostrar valores"}>
             <IconButton
@@ -1714,6 +2526,11 @@ function ComandaDetails({
               aria-label={show ? "Ocultar valores" : "Mostrar valores"}
             >
               {show ? <VisibilityIcon /> : <VisibilityOffIcon />}
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="Fechar (Esc)">
+            <IconButton color="inherit" onClick={onClose} aria-label="Fechar">
+              <CloseIcon />
             </IconButton>
           </Tooltip>
         </Stack>
@@ -1751,10 +2568,11 @@ function ComandaDetails({
                   <AccordionSummary expandIcon={<ExpandMoreIcon />}>
                     <Stack spacing={0.5}>
                       <Typography fontWeight={600}>{formatDateTime(sale.createdAt)}</Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        {sale.paymentMethod}
-                        {sale.notes ? ` • ${sale.notes}` : ""}
-                      </Typography>
+                      {sale.notes ? (
+                        <Typography variant="body2" color="text.secondary">
+                          {sale.notes}
+                        </Typography>
+                      ) : null}
                     </Stack>
                   </AccordionSummary>
                   <AccordionDetails>
@@ -1817,7 +2635,7 @@ function ComandaDetails({
         </Stack>
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 2 }}>
-        <Button onClick={onClose}>Voltar</Button>
+        <Button onClick={onClose}>Voltar (Esc)</Button>
         <Box sx={{ flexGrow: 1 }} />
         <Button
           variant="contained"
@@ -1828,8 +2646,18 @@ function ComandaDetails({
         </Button>
       </DialogActions>
 
-      <AddSaleDialog open={openSale} onClose={() => setOpenSale(false)} comandaId={comandaId} />
-      <AddPaymentDialog open={openPayment} onClose={() => setOpenPayment(false)} comandaId={comandaId} />
+      <AddSaleDialog
+        open={openSale}
+        onClose={() => setOpenSale(false)}
+        comandaId={comandaId}
+        initialProductId={prefillProductId ?? undefined}
+      />
+      <AddPaymentDialog
+        open={openPayment}
+        onClose={() => setOpenPayment(false)}
+        comandaId={comandaId}
+        dueAmount={balance}
+      />
     </Dialog>
   );
 }
@@ -1837,11 +2665,15 @@ function ComandaDetails({
 function AddSaleDialog({
   open,
   onClose,
-  comandaId
+  comandaId,
+  initialProductId,
+  onSaved
 }: {
   open: boolean;
   onClose: () => void;
   comandaId: number;
+  initialProductId?: number;
+  onSaved?: (saleTotal: number) => void;
 }) {
   const { format } = useAmountVisibility();
   const groups = useLiveQuery(() => db.product_groups.toArray(), []);
@@ -1855,16 +2687,18 @@ function AddSaleDialog({
   const [selectedProductId, setSelectedProductId] = useState<number | null>(null);
   const [selectedQty, setSelectedQty] = useState(0);
   const [selectedPrice, setSelectedPrice] = useState("0");
+  const [searchTerm, setSearchTerm] = useState("");
 
   useEffect(() => {
     if (!open) return;
     setItems({});
     setNotes("");
     setSaleDate(new Date().toISOString().slice(0, 10));
-    setSelectedProductId(null);
+    setSelectedProductId(initialProductId ?? null);
     setSelectedQty(0);
     setSelectedPrice("0");
-  }, [open]);
+    setSearchTerm("");
+  }, [open, initialProductId]);
 
   const updateItem = (product: Product, quantity: number, unitPrice?: string) => {
     setItems((prev) => {
@@ -1894,13 +2728,18 @@ function AddSaleDialog({
 
   const productsByGroup = useMemo(() => {
     const map = new Map<number, Product[]>();
-    (products ?? []).forEach((product) => {
+    const normalizedSearch = searchTerm.trim().toLowerCase();
+    (products ?? [])
+      .filter((product) =>
+        normalizedSearch ? product.name.toLowerCase().includes(normalizedSearch) : true
+      )
+      .forEach((product) => {
       const key = product.groupId ?? 0;
       if (!map.has(key)) map.set(key, []);
       map.get(key)?.push(product);
     });
     return map;
-  }, [products]);
+  }, [products, searchTerm]);
 
   useEffect(() => {
     if (!selectedProduct) return;
@@ -1932,6 +2771,7 @@ function AddSaleDialog({
     }));
 
     await db.sale_items.bulkAdd(saleItems);
+    onSaved?.(saleTotal);
     onClose();
   };
 
@@ -1959,6 +2799,14 @@ function AddSaleDialog({
             <Typography variant="subtitle2" color="text.secondary">
               Produtos por categoria
             </Typography>
+            {!selectedProduct && (
+              <TextField
+                label="Buscar produto"
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+                fullWidth
+              />
+            )}
             {selectedProduct ? (
               <Card sx={{ bgcolor: "#fff" }}>
                 <CardContent>
@@ -2156,11 +3004,17 @@ function AddSaleDialog({
 function AddPaymentDialog({
   open,
   onClose,
-  comandaId
+  comandaId,
+  dueAmount,
+  initialAmount,
+  onSaved
 }: {
   open: boolean;
   onClose: () => void;
   comandaId: number;
+  dueAmount?: number;
+  initialAmount?: number;
+  onSaved?: (amount: number) => void;
 }) {
   const [method, setMethod] = useState<PaymentMethod>("PIX");
   const [amount, setAmount] = useState("0");
@@ -2169,11 +3023,12 @@ function AddPaymentDialog({
   useEffect(() => {
     if (!open) return;
     setMethod("PIX");
-    setAmount("0");
+    setAmount(initialAmount ? String(initialAmount) : "0");
     setNotes("");
-  }, [open]);
+  }, [open, initialAmount]);
 
   const isValid = amount.trim() !== "" && !Number.isNaN(Number(amount)) && Number(amount) > 0;
+  const remaining = typeof dueAmount === "number" ? Math.max(dueAmount - (Number(amount) || 0), 0) : null;
 
   const handleSave = async () => {
     if (!isValid) return;
@@ -2185,6 +3040,7 @@ function AddPaymentDialog({
       notes: notes.trim() || undefined
     };
     await db.payments.add(payload);
+    onSaved?.(payload.amount);
     onClose();
   };
 
@@ -2193,6 +3049,24 @@ function AddPaymentDialog({
       <DialogTitle>Adicionar pagamento</DialogTitle>
       <DialogContent>
         <Stack spacing={2} sx={{ mt: 1 }}>
+          {typeof dueAmount === "number" && (
+            <Card sx={{ bgcolor: "#fff" }}>
+              <CardContent>
+                <Stack spacing={1}>
+                  <Stack direction="row" justifyContent="space-between" alignItems="center">
+                    <Typography color="text.secondary">Total devido</Typography>
+                      <Typography fontWeight={700}>{formatCurrency(dueAmount)}</Typography>
+                    </Stack>
+                  {remaining !== null && (
+                    <Stack direction="row" justifyContent="space-between" alignItems="center">
+                      <Typography color="text.secondary">Saldo remanescente</Typography>
+                      <Typography fontWeight={700}>{formatCurrency(remaining)}</Typography>
+                    </Stack>
+                  )}
+                </Stack>
+              </CardContent>
+            </Card>
+          )}
           <FormControl fullWidth>
             <InputLabel id="payment-method">Forma</InputLabel>
             <Select

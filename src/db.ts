@@ -13,12 +13,15 @@ export type ProductSubgroup = {
 
 export type Product = {
   id?: number;
+  externalId?: string;
   name: string;
   groupId: number;
   subgroupId?: number | null;
   unitPrice: number;
   sellsFractioned: boolean;
   active: boolean;
+  favorite?: boolean;
+  imageUrl?: string;
 };
 
 export type Customer = {
@@ -134,6 +137,66 @@ class BotecoDB extends Dexie {
         }
         await comandasTable.where("id").anyOf(orphanComandaIds).delete();
       });
+    this.version(4).stores({
+      product_groups: "++id, name",
+      product_subgroups: "++id, groupId, name",
+      products: "++id, name, groupId, subgroupId, active, favorite",
+      customers: "++id, name, phone, favorite",
+      comandas: "++id, customerId, status, openedAt",
+      sales: "++id, comandaId, createdAt",
+      sale_items: "++id, saleId, productId",
+      payments: "++id, comandaId, createdAt"
+    });
+    this.version(5)
+      .stores({
+        product_groups: "++id, name",
+        product_subgroups: "++id, groupId, name",
+        products: "++id, externalId, name, groupId, subgroupId, active, favorite, imageUrl",
+        customers: "++id, name, phone, favorite",
+        comandas: "++id, customerId, status, openedAt",
+        sales: "++id, comandaId, createdAt",
+        sale_items: "++id, saleId, productId",
+        payments: "++id, comandaId, createdAt"
+      })
+      .upgrade(async (tx) => {
+        const productsTable = tx.table<Product, number>("products");
+        const products = await productsTable.toArray();
+        const used = new Set<string>();
+
+        const slugify = (value: string) =>
+          value
+            .toLowerCase()
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "")
+            .replace(/[^a-z0-9]+/g, "-")
+            .replace(/(^-|-$)+/g, "");
+
+        for (const product of products) {
+          if (!product.id) continue;
+          const existingId = product.externalId?.trim();
+          if (existingId) {
+            used.add(existingId);
+            continue;
+          }
+          const base = `PROD-${slugify(product.name)}`.toUpperCase();
+          let candidate = base;
+          if (used.has(candidate)) {
+            candidate = `${base}-${product.id}`;
+          }
+          used.add(candidate);
+          await productsTable.update(product.id, { externalId: candidate });
+        }
+      });
+    this.version(6).stores({
+      product_groups: "++id, name",
+      product_subgroups: "++id, groupId, name",
+      products: "++id, externalId, name, groupId, subgroupId, active, favorite, imageUrl",
+      customers: "++id, name, phone, favorite",
+      comandas: "++id, customerId, status, openedAt",
+      sales: "++id, comandaId, createdAt",
+      sale_items: "++id, saleId, productId",
+      payments: "++id, comandaId, createdAt"
+    });
   }
 }
 
