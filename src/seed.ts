@@ -1,4 +1,4 @@
-import { db } from "./db";
+import { db, type SaleItem } from "./db";
 
 export async function seedIfEmpty(): Promise<void> {
   const count = await db.product_groups.count();
@@ -228,14 +228,7 @@ export async function seedIfEmpty(): Promise<void> {
 
   await db.transaction(
     "rw",
-    db.product_groups,
-    db.product_subgroups,
-    db.products,
-    db.customers,
-    db.comandas,
-    db.sales,
-    db.sale_items,
-    db.payments,
+    [db.product_groups, db.product_subgroups, db.products, db.customers, db.comandas, db.sales, db.sale_items, db.payments],
     async () => {
       const groups = await db.product_groups.toArray();
       if (groups.length === 0) {
@@ -349,7 +342,7 @@ export async function seedIfEmpty(): Promise<void> {
           createdAt,
           paymentMethod: "CASH"
         });
-        const saleItems = items
+        const saleItems: SaleItem[] = items
           .map((item) => {
             const product = pick(item.name);
             if (!product?.id) return null;
@@ -362,7 +355,7 @@ export async function seedIfEmpty(): Promise<void> {
               subtotal: unitPrice * item.quantity
             };
           })
-          .filter(Boolean);
+          .filter((item): item is SaleItem => item !== null);
         if (saleItems.length > 0) {
           await db.sale_items.bulkAdd(saleItems);
         }
